@@ -1,5 +1,6 @@
 package com.example.gmtcrawlingserver.service;
 
+import com.example.gmtcrawlingserver.dto.CompetitionDto;
 import io.github.bonigarcia.wdm.WebDriverManager;
 import lombok.extern.log4j.Log4j2;
 import org.openqa.selenium.By;
@@ -7,10 +8,7 @@ import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
-import org.openqa.selenium.support.ui.ExpectedConditions;
-import org.openqa.selenium.support.ui.WebDriverWait;
-
-import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -31,50 +29,64 @@ public class CompetitionInformationScrapper {
         driver.manage().window().maximize();
 
         try {
-            // URL로 이동
-            String url = "https://sfa.bkplay.kr/" +
-                    "tournament/area/list.do?" +
-                    "searchStartDate=&searchEndDate=&provinceOrgId=&cityOrgId=&status=&pageRowCnt=10&sortType=&isFirstSearch=false&pageNo=1";
-            // 페이지 로드 대기
-            driver.manage().timeouts().implicitlyWait(10, TimeUnit.SECONDS);
-            driver.get(url);
-            List<WebElement> datas = driver.findElements(By.cssSelector("body > div.wrap > div.container > div.inner"));
+            // DTO List
+            List<CompetitionDto> dtoList = new ArrayList<>();
+
+            // 페이지 번호 반복 (1부터 30까지)
+            for (int pageNo = 1; pageNo <= 5; pageNo++) {
+                // URL 생성
+                String url = "https://sfa.bkplay.kr/" +
+                        "tournament/area/list.do?" +
+                        "searchStartDate=&searchEndDate=" +
+                        "&provinceOrgId=&cityOrgId=&status=&pageRowCnt=10" +
+                        "&sortType=&isFirstSearch=false&pageNo=" + pageNo;
+
+                // 페이지 로드
+                driver.manage().timeouts().implicitlyWait(10, TimeUnit.SECONDS);
+                driver.get(url);
 
 
+                List<WebElement> datas = driver.findElements(By.cssSelector("body > div.wrap > div.container > div.inner > div.sub-competition > ul.competition-list.type2 > li"));
 
-            if (datas.isEmpty()) {
-                System.out.println("요소를 찾을 수 없습니다.");
-            } else {
-                for (WebElement data : datas) {
+                if (datas.isEmpty()) {
+                    System.out.println("페이지 " + pageNo + "에서 요소를 찾을 수 없습니다.");
+                } else {
+                    System.out.println("페이지 " + pageNo + "에서 찾은 요소 개수: " + datas.size());
 
-                    
-                    List<WebElement> infos = data.findElements(By.cssSelector("div.sub-competition > ul.competition-list.type2 > li > div > div.txt-cont "));
-                    for (WebElement element : infos) {
-                        String text = element.getText();
-                        System.out.println("텍스트: " + text);
+                    for (WebElement data : datas) {
+
+                        CompetitionDto competitionDto = new CompetitionDto();
+
+                        // 정보 추출
+                        WebElement info = data.findElement(By.cssSelector("div > div.txt-cont"));
+                        String infoText = info.getText();
+                        competitionDto.setInfoText(infoText);
+
+
+                        // redirectUrl 가져오기
+                        WebElement linkElement = data.findElement(By.cssSelector("div > a"));
+                        String href = linkElement.getAttribute("href");
+                        competitionDto.setRedirectLink(href);
+
+                        // 대회 상태 갖고오기
+                        WebElement statusElement = data.findElement(By.cssSelector("div.poster"));
+                        competitionDto.setStatus(statusElement.getText());
+
+                        // 이미지 src 가져오기, 대회명 가져오기
+                        WebElement imageElement = data.findElement(By.cssSelector("img"));
+                        String imageSrc = imageElement.getAttribute("src");
+                        String title = imageElement.getAttribute("alt");
+                        competitionDto.setPosterImageUrl(imageSrc);
+                        competitionDto.setTitle(title);
+
+
+                        dtoList.add(competitionDto);
+
                     }
-                    
-                    
-
-                    // redirectUrl 가져오기
-                    List<WebElement> linkElements = data.findElements(By.cssSelector("div.sub-competition > ul.competition-list.type2 > li > div > a "));
-                    for (WebElement element : linkElements) {
-                        String href = element.getAttribute("href");
-                        System.out.println("a 태그 링크: " + href);
-                    }
-
-                   // 이미지 src 가져오기
-                    List<WebElement> imageElements = data.findElements(By.cssSelector("div.poster > img"));
-                    for (WebElement image : imageElements) {
-                        String imageSrc = image.getAttribute("src");
-                        String title = image.getAttribute("alt");
-                        System.out.println("이미지 src: " + imageSrc);
-                        System.out.println("title : " + title);
-                    }
-
                 }
             }
 
+            dtoList.forEach(System.out::println);
 
 
         } catch (Exception e) {
